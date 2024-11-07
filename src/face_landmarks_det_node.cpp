@@ -218,6 +218,141 @@ int FaceLandmarksDetNode::PostProcess(const std::shared_ptr<DnnNodeOutput> &node
         SaveLandmarksToTxt(txt_filename, fac_landmarks_det_output->valid_rois, face_landmarks_det_result);
         return 0;
     }
+
+    // 3. pub ai msg
+    ai_msgs::msg::PerceptionTargets::UniquePtr &msg = fac_landmarks_det_output->ai_msg;
+    if (face_landmarks_det_result->values.size() != fac_landmarks_det_output->valid_rois->size() || fac_landmarks_det_output->valid_rois->size() != fac_landmarks_det_output->valid_roi_idx.size())
+    {
+        RCLCPP_ERROR(this->get_logger(), "check face age det outputs fail");
+        ai_msg_publisher_->publish(std::move(msg));
+        return 0;
+    }
+
+    if (msg != nullptr)
+    {
+        ai_msgs::msg::PerceptionTargets::UniquePtr ai_msg(new ai_msgs::msg::PerceptionTargets());
+        ai_msg->set__header(msg->header);
+        ai_msg->set__disappeared_targets(msg->disappeared_targets);
+        if (node_output->rt_stat)
+        {
+            ai_msg->set__fps(round(node_output->rt_stat->output_fps));
+        }
+
+        int face_roi_idx = 0;
+        const std::map<size_t, size_t> &valid_roi_idx = fac_landmarks_det_output->valid_roi_idx;
+
+        for (const auto &in_target : msg->targets)
+        {
+            std::vector<ai_msgs::msg::Point> landmarks_points;
+
+            ai_msgs::msg::Target target;
+            target.set__type(in_target.type);
+
+            target.set__attributes(in_target.attributes);
+            target.set__captures(in_target.captures);
+            target.set__track_id(in_target.track_id);
+
+            std::vector<ai_msgs::msg::Roi> rois;
+            for (const auto &roi : in_target.rois)
+            {
+                RCLCPP_DEBUG(this->get_logger(), "roi.type: %s", roi.type.c_str());
+
+                if ("face" == roi.type)
+                {
+                    rois.push_back(roi);
+                    target.set__rois(rois);
+                    // check face_roi_idx in valid_roi_idx
+                    if (valid_roi_idx.find(face_roi_idx) == valid_roi_idx.end())
+                    {
+                        RCLCPP_WARN(this->get_logger(), "This face is filtered! face_roi_idx %d is unmatch with roi idx", face_roi_idx);
+                        std::stringstream ss;
+                        ss << "valid_roi_idx: ";
+                        for (auto idx : valid_roi_idx)
+                        {
+                            ss << idx.first << " " << idx.second << "\n";
+                        }
+                        RCLCPP_DEBUG(this->get_logger(), "%s", ss.str().c_str());
+                        continue;
+                    }
+
+                    // get roi id
+                    auto face_valid_roi_idx = valid_roi_idx.at(face_roi_idx);
+                    if (face_valid_roi_idx >= face_landmarks_det_result->values.size())
+                    {
+                        RCLCPP_ERROR(this->get_logger(), "face landmarks det outputs %ld unmatch with roi idx %ld", face_landmarks_det_result->values.size(), face_valid_roi_idx);
+                        break;
+                    }
+
+                    // add face landmarks to target
+                    ai_msgs::msg::Point face_landmarks;
+                    face_landmarks.set__type("face_kps");
+                    for (const auto &points : face_landmarks_det_result->values[face_valid_roi_idx])
+                    {
+                        geometry_msgs::msg::Point32 pt;
+                        pt.set__x(points.x);
+                        pt.set__y(points.y);
+                        face_landmarks.point.emplace_back(pt);
+                    }
+                    landmarks_points.push_back(face_landmarks);
+
+                    face_roi_idx++;
+                }
+            }
+            target.set__points(landmarks_points);
+
+            ai_msg->set__perfs(msg->perfs);
+
+            fac_landmarks_det_output->perf_preprocess.set__time_ms_duration(
+                CalTimeMsDuration(fac_landmarks_det_output->perf_preprocess.stamp_start, fac_landmarks_det_output->perf_preprocess.stamp_end));
+            ai_msg->perfs.push_back(fac_landmarks_det_output->perf_preprocess);
+
+            // predict
+            if (fac_landmarks_det_output->rt_stat)
+            {
+                ai_msgs::msg::Perf perf;
+                perf.set__type(model_name_ + "_predict_infer");
+                perf.set__stamp_start(ConvertToRosTime(fac_landmarks_det_output->rt_stat->infer_timespec_start));
+                perf.set__stamp_end(ConvertToRosTime(fac_landmarks_det_output->rt_stat->infer_timespec_end));
+                perf.set__time_ms_duration(fac_landmarks_det_output->rt_stat->infer_time_ms);
+                ai_msg->perfs.push_back(perf);
+
+                perf.set__type(model_name_ + "_predict_parse");
+                perf.set__stamp_start(ConvertToRosTime(fac_landmarks_det_output->rt_stat->parse_timespec_start));
+                perf.set__stamp_end(ConvertToRosTime(fac_landmarks_det_output->rt_stat->parse_timespec_end));
+                perf.set__time_ms_duration(fac_landmarks_det_output->rt_stat->parse_time_ms);
+                ai_msg->perfs.push_back(perf);
+            }
+
+            ai_msgs::msg::Perf perf_postprocess;
+            perf_postprocess.set__type(model_name_ + "_postprocess");
+            perf_postprocess.set__stamp_start(ConvertToRosTime(time_now));
+            clock_gettime(CLOCK_REALTIME, &time_now);
+            perf_postprocess.set__stamp_end(ConvertToRosTime(time_now));
+            perf_postprocess.set__time_ms_duration(CalTimeMsDuration(perf_postprocess.stamp_start, perf_postprocess.stamp_end));
+            ai_msg->perfs.emplace_back(perf_postprocess);
+
+            // 从发布图像到发布AI结果的延迟
+            ai_msgs::msg::Perf perf_pipeline;
+            perf_pipeline.set__type(model_name_ + "_pipeline");
+            perf_pipeline.set__stamp_start(ai_msg->header.stamp);
+            perf_pipeline.set__stamp_end(perf_postprocess.stamp_end);
+            perf_pipeline.set__time_ms_duration(CalTimeMsDuration(perf_pipeline.stamp_start, perf_pipeline.stamp_end));
+            ai_msg->perfs.push_back(perf_pipeline);
+
+            if (!target.rois.empty())
+            {
+                ai_msg->targets.emplace_back(target);
+            }
+        }
+
+        ai_msg_publisher_->publish(std::move(ai_msg));
+    }
+    else
+    {
+        RCLCPP_ERROR(this->get_logger(), "=> invalid ai msg, pub msg fail!");
+        return -1;
+    }
+
     return 0;
 }
 
