@@ -1,6 +1,7 @@
 #ifndef FACE_LANDMARKS_DET_NODE_H
 #define FACE_LANDMARKS_DET_NODE_H
 
+#include <fstream>
 #include "rclcpp/rclcpp.hpp"
 #include "dnn_node/dnn_node.h"
 #include "dnn_node/util/image_proc.h"
@@ -94,6 +95,10 @@ private:
      */
     int Render(const std::shared_ptr<NV12PyramidInput> &pyramid, std::string result_image, std::shared_ptr<std::vector<hbDNNRoi>> &valid_rois, std::shared_ptr<FaceLandmarksDetResult> &face_landmarks_det_result);
 
+    /**
+     * @brief save face landmarks to txt file
+     */
+    int SaveLandmarksToTxt(std::string result_txt, std::shared_ptr<std::vector<hbDNNRoi>> &valid_rois, std::shared_ptr<FaceLandmarksDetResult> &face_landmarks_det_result);
     // =================================================================================================================================
     // image source used for inference, 0: subscribed image msg; 1: local nv12 format image
     int feed_type_ = 0;

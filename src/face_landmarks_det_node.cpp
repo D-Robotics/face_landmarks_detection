@@ -165,6 +165,9 @@ int FaceLandmarksDetNode::PostProcess(const std::shared_ptr<DnnNodeOutput> &node
     // offline mode does not require publishing ai msg
     if (feed_type_ == 1)
     {
+        std::string txt_filename = "face_landmarks.txt";
+        RCLCPP_INFO(this->get_logger(), "=> face landmarks save to: %s", txt_filename.c_str());
+        SaveLandmarksToTxt(txt_filename, fac_landmarks_det_output->valid_rois, face_landmarks_det_result);
         return 0;
     }
     return 0;
@@ -295,12 +298,39 @@ int FaceLandmarksDetNode::Render(const std::shared_ptr<NV12PyramidInput> &pyrami
         // draw points
         for (const auto &point : points)
         {
-            cv::circle(bgr, cv::Point(std::round(point.x), std::round(point.y)), 2, cv::Scalar(255, 0, 0), 2);
+            cv::circle(bgr, cv::Point(std::round(point.x), std::round(point.y)), 1, cv::Scalar(255, 0, 0), -1);
         }
     }
 
     RCLCPP_INFO(this->get_logger(), "=> render image save to: %s", result_image.c_str());
     cv::imwrite(result_image, bgr);
 
+    return 0;
+}
+
+int FaceLandmarksDetNode::SaveLandmarksToTxt(std::string result_txt, std::shared_ptr<std::vector<hbDNNRoi>> &valid_rois, std::shared_ptr<FaceLandmarksDetResult> &face_landmarks_det_result)
+{
+    // open file
+    std::ofstream outfile;
+    outfile.open(result_txt);
+    if (outfile.is_open())
+    {
+        for (size_t i = 0; i < valid_rois->size(); i++)
+        {
+            auto rect = valid_rois->at(i);
+            auto points = face_landmarks_det_result->values.at(i);
+            outfile << "roi: " << rect.left << "," << rect.top << "," << rect.right << "," << rect.bottom << std::endl;
+            for (const auto &point : points)
+            {
+                outfile << point.x << "," << point.y << "," << point.score << std::endl;
+            }
+        }
+        outfile.close();
+    }
+    else
+    {
+        RCLCPP_INFO(this->get_logger(), "=> unable to open file for writing");
+        return -1;
+    }
     return 0;
 }

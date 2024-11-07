@@ -202,18 +202,38 @@ int32_t FaceLandmarksDetOutputParser::Parse(std::shared_ptr<FaceLandmarksDetResu
                     }
                     max_index = max_index + (diff * 1.0 + 0.5);
 
+                    // calculate the score of each landmarks
+                    auto cal_score = [&max_value](float score) -> float
+                    {
+                        float new_score = 0.0;
+                        float val = max_value / 2.0;
+                        if (val > 1.0)
+                        {
+                            val = 1.0;
+                        }
+                        if (score > 0)
+                        {
+                            new_score = std::min(score, val);
+                        }
+                        else
+                        {
+                            new_score = val;
+                        }
+                        return new_score;
+                    };
+
                     // save face landmarks to result
                     if (axis == 0)
                     {
                         // x coordinate
                         face_landmarks_det_result->values.at(b).at(point_idx).x = max_index * roi_width / vector_size + roi.left;
-                        // face_landmarks_det_result->values.at(b).at(point_idx).score =
+                        face_landmarks_det_result->values.at(b).at(point_idx).score = cal_score(face_landmarks_det_result->values.at(b).at(point_idx).score);
                     }
                     else
                     {
                         //  y coordinate
                         face_landmarks_det_result->values.at(b).at(point_idx).y = max_index * roi_height / vector_size + roi.top;
-                        // face_landmarks_det_result->values.at(b).at(point_idx).score =
+                        face_landmarks_det_result->values.at(b).at(point_idx).score = cal_score(face_landmarks_det_result->values.at(b).at(point_idx).score);
                     }
                 }
             }
