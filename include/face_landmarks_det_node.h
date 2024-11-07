@@ -8,6 +8,10 @@
 #include "ai_msgs/msg/perception_targets.hpp"
 #include "img_convert_utils.h"
 #include "face_landmarks_det_output_parser.h"
+#include "ai_msg_manage.h"
+#ifdef SHARED_MEM_ENABLED
+#include "hbm_img_msgs/msg/hbm_msg1080_p.hpp"
+#endif
 
 using rclcpp::NodeOptions;
 
@@ -99,6 +103,31 @@ private:
      * @brief save face landmarks to txt file
      */
     int SaveLandmarksToTxt(std::string result_txt, std::shared_ptr<std::vector<hbDNNRoi>> &valid_rois, std::shared_ptr<FaceLandmarksDetResult> &face_landmarks_det_result);
+        /**
+     * @brief do model inference -- online
+     */
+    void RunPredict();
+
+    /**
+     * @brief ai msg process callback
+     */
+    void AiMsgProcess(const ai_msgs::msg::PerceptionTargets::ConstSharedPtr msg);
+
+    /**
+     * @brief img msg process callback
+     */
+    void RosImgProcess(const sensor_msgs::msg::Image::ConstSharedPtr msg);
+
+    // =================================================================================================================================
+#ifdef SHARED_MEM_ENABLED
+    // sharedmem img sub
+    rclcpp::Subscription<hbm_img_msgs::msg::HbmMsg1080P>::ConstSharedPtr sharedmem_img_subscription_ = nullptr;
+    // sharedmem img sub topic
+    std::string sharedmem_img_topic_name_ = "/hbmem_img";
+    // sharedmem img process callback
+    void SharedMemImgProcess(const hbm_img_msgs::msg::HbmMsg1080P::ConstSharedPtr msg);
+#endif
+
     // =================================================================================================================================
     // image source used for inference, 0: subscribed image msg; 1: local nv12 format image
     int feed_type_ = 0;
@@ -148,15 +177,15 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::Image>::ConstSharedPtr ros_img_subscription_ = nullptr;
 
     // use to process ai msg
-    // std::shared_ptr<AiMsgManage> ai_msg_manage_ = nullptr;
+    std::shared_ptr<AiMsgManage> ai_msg_manage_ = nullptr;
 
     // predict task
     std::shared_ptr<std::thread> predict_task_ = nullptr;
 
     // Convert the subscribed image data into pym and cache it in the queue
-    // using CacheImgType = std::pair<std::shared_ptr<FaceAgeDetOutput>, std::shared_ptr<NV12PyramidInput>>;
-    // std::queue<CacheImgType> cache_img_;
-    // size_t cache_len_limit_ = 8;
+    using CacheImgType = std::pair<std::shared_ptr<FaceLandmarksDetOutput>, std::shared_ptr<NV12PyramidInput>>;
+    std::queue<CacheImgType> cache_img_;
+    size_t cache_len_limit_ = 8;
 
     // Perform inference in threads to avoid blocking IO channels and causing AI msg message loss
     std::mutex mtx_img_;

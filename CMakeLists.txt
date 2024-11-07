@@ -47,7 +47,7 @@ link_directories(
 )
 
 # add executable
-add_executable(face_landmarks_detection src/main.cpp src/face_landmarks_det_node.cpp src/face_landmarks_det_output_parser.cpp src/img_convert_utils.cpp)
+add_executable(face_landmarks_detection src/main.cpp src/face_landmarks_det_node.cpp src/face_landmarks_det_output_parser.cpp src/ai_msg_manage.cpp src/img_convert_utils.cpp)
 target_compile_features(face_landmarks_detection PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 target_include_directories(face_landmarks_detection PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
