@@ -21,7 +21,7 @@ FaceLandmarksDetNode::FaceLandmarksDetNode(const std::string &node_name, const N
     /* param settings */
     feed_type_ = this->declare_parameter<int>("feed_type", feed_type_);
     feed_image_path_ = this->declare_parameter<std::string>("feed_image_path", feed_image_path_);
-    std::string roi_xyxy = this->declare_parameter<std::string>("roi_xyxy", roi_xyxy);
+    std::string roi_xyxy = this->declare_parameter<std::string>("roi_xyxy", "0,0,0,0");
     is_sync_mode_ = this->declare_parameter<int>("is_sync_mode", is_sync_mode_);
     model_file_name_ = this->declare_parameter<std::string>("model_file_name", model_file_name_);
     is_shared_mem_sub_ = this->declare_parameter<int>("is_shared_mem_sub", is_shared_mem_sub_);
