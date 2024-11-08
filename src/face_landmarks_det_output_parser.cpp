@@ -10,7 +10,7 @@ int32_t FaceLandmarksDetOutputParser::Parse(std::shared_ptr<FaceLandmarksDetResu
     // check roi
     if (rois == nullptr || static_cast<int>(rois->size()) == 0)
     {
-        RCLCPP_ERROR(logger_, "=> get null rois");
+        RCLCPP_INFO(logger_, "=> get null rois");
         return -1;
     }
 
