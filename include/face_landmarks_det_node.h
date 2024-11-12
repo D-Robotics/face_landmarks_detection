@@ -128,6 +128,9 @@ private:
     void SharedMemImgProcess(const hbm_img_msgs::msg::HbmMsg1080P::ConstSharedPtr msg);
 #endif
 
+    int NormalizeRoi(const hbDNNRoi *src, hbDNNRoi *dst,
+                    float norm_ratio, uint32_t total_w, uint32_t total_h);
+
     // =================================================================================================================================
     // image source used for inference, 0: subscribed image msg; 1: local nv12 format image
     int feed_type_ = 0;
@@ -145,6 +148,8 @@ private:
     int model_input_width_ = -1;
     int model_input_height_ = -1;
     int32_t model_output_count_ = 1;
+
+    float expand_scale_ = 1.25;
 
     // mode task type
     ModelTaskType model_task_type_ = ModelTaskType::ModelRoiInferType;
